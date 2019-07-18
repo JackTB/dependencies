@@ -1,0 +1,135 @@
+// common java setup for our new Java8 builds
+// Note - You must apply the java plugin in your build.gradle before including this file
+
+apply plugin: 'eclipse'
+eclipse {
+    classpath {
+        downloadJavadoc = true
+        downloadSources = true
+    }
+}
+apply plugin: 'idea'
+// Groovy based UnitTests
+apply plugin: 'groovy'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+compileJava.options.encoding = 'UTF-8'
+compileTestJava.options.encoding = 'UTF-8'
+
+if (JavaVersion.current() != JavaVersion.VERSION_1_8) {
+  throw new GradleException("!!!!! ERROR - CDP builds require Java 8 for compile and runtime!!!!!")
+}
+
+// NOTE:  We are NOT overriding the default sourceSets, but listing them below to show where code should go in new projects (which matches the CDP format)
+// custom sourceSets must be defined in your build.gradle
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+    test {
+        java {
+            srcDir 'src/test/java'
+        }
+        resources {
+            srcDir 'src/test/resources'
+        }
+        groovy {
+            srcDir 'src/test/groovy'
+        }
+    }
+    // NOTE:  This has changed to match the CDP defined layout
+    integrationTest {
+        java {
+            compileClasspath += sourceSets.test.runtimeClasspath
+            runtimeClasspath += sourceSets.test.runtimeClasspath
+            srcDir 'src/test-integration/java'
+        }
+        resources {
+            srcDir 'src/test-integration/resources'
+        }
+    }
+    // NOTE:  This is unique to CI360 and has no matching CDP layout
+    smokeTest {
+        java {
+            compileClasspath += sourceSets.test.runtimeClasspath
+            runtimeClasspath += sourceSets.test.runtimeClasspath
+            srcDir 'src/test-smoke/java'
+        }
+        resources {
+            srcDir 'src/test-smoke/resources'
+        }
+    }
+}
+
+// Turn off new doclint Javadoc feature in Java 8 and just produce warnings for now
+tasks.withType(Javadoc) {
+    if (JavaVersion.current().isJava8Compatible()) {
+        options.addStringOption('Xdoclint:none', '-quiet')
+    }
+}
+
+// Disable the HTML test reports for individual test tasks to allow for testReport task aggregation
+tasks.withType(Test) {
+    // make the test tasks ignore failures in --continue mode
+    ignoreFailures = gradle.startParameter.continueOnFailure
+    // set heap size for the test JVM(s)
+    minHeapSize = "256m"
+    maxHeapSize = "4096m"
+    // only generate XML test output for the subprojects
+    reports {
+        junitXml.enabled = true
+        html.enabled = false
+    }
+    // customize test reporting to the console
+    testLogging {
+        // set options for log level LIFECYCLE
+        events "passed", "skipped", "failed"
+        showExceptions true
+        exceptionFormat "full"
+        showCauses true
+        showStackTraces true
+        // set options for log level DEBUG and INFO to show more details
+        info {
+            events "started", "passed", "skipped", "failed", "standardOut"
+            exceptionFormat "full"
+        }
+        debug {
+            events "started", "passed", "skipped", "failed", "standardOut", "standardError"
+            exceptionFormat "full"
+        }
+        afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
+                def startItem = '|  ', endItem = '  |'
+                def repeatLength = startItem.length() + output.length() + endItem.length()
+                println('\n' + ('-' * repeatLength) + '\n' + startItem + path + '\n' + startItem + output + '\n' + ('-' * repeatLength))
+            }
+        }
+    }
+}
+
+// Define our default SAS manifest entries, which Spring boot will add too
+// See - http://sww.sas.com/saspedia/Jar_Versioning_Standard
+// Requires values defined in ../gradle.properties and ./jenkins.gradle
+jar.doFirst {
+    manifest {
+        attributes (
+            "Manifest-Version" : "1.0",
+            "Created-By" : vendor,
+            "Specification-Title" : rootProject.name,
+            "Specification-Version" : version,
+            "Specification-Vendor" : vendor,
+            "Implementation-Title" : project.name,
+            "Implementation-Version" : buildLevel,
+            "Implementation-Vendor" : vendor,
+            "Implementation-Vendor-Id" : vendorId,
+            "Copyright" : copyright
+        )
+    }
+}

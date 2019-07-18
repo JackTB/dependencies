@@ -1,0 +1,18 @@
+// Common Swagger setup for our builds
+// Any build.gradle files that include this, must have the following in their buildScript dependencies -
+//         classpath "org.asciidoctor:asciidoctor-gradle-plugin:${versions.asciidoctor}"
+//         classpath "${libraries.asciidoctorj_pdf}"
+
+apply plugin: 'org.asciidoctor.convert'
+
+def targetDocDir = "${project.buildDir}/asciidoc/generated/swagger_adoc"
+test {
+    systemProperty "asciiDocOutputDir", targetDocDir
+}
+
+asciidoctor.dependsOn test
+
+asciidoctor {
+  backends = ['html5', 'pdf']
+  sourceDir = file(targetDocDir)
+}

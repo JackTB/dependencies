@@ -1,0 +1,237 @@
+def grgitBranch = "unknown"
+def grgitCommit = "unknown"
+def grgitURL    = "unknown"
+try {
+    grgitBranch = grgit.branch.getCurrent().getName()
+    grgitCommit = grgit.head().id
+    grgitURL    = grgit.remote.list().first().url
+} catch (all) {
+    // no-op
+}
+
+ext {
+    //-------------------------------------------------------------
+    // Initialize build and AWS parameters
+    //-------------------------------------------------------------
+    branch = System.getProperty('branch', grgitBranch)
+    buildRelease = "v${buildSprint}"
+    buildTimestamp = (System.getenv('BUILD_TIMESTAMP') != null) ? System.getenv('BUILD_TIMESTAMP') : project.rootProject.startTime
+    buildLevel = (System.getenv('BUILD_TIMESTAMP') != null) ? "1.${buildSprint}.${buildTimestamp}" : "dev-${buildSprint}-${buildTimestamp}"
+    buildType = System.getProperty('buildType', "personal")
+    buildVerQuantifier = System.getProperty('buildVerQuantifier', "SNAPSHOT")
+    buildUploadArchives = true    // will be overridden below if needed
+    gitCommit = (System.getenv('GIT_COMMIT') != null) ? System.getenv('GIT_COMMIT') : grgitCommit
+    gitRepo = (System.getenv('GIT_URL') != null) ? System.getenv('GIT_URL') : ((System.getenv('GIT_URL_2') != null) ? System.getenv('GIT_URL_2') : grgitURL)
+    baseAMI = System.getProperty('baseAMI', null)
+    analyticsAMI = System.getProperty('analyticsAMI', null)
+    casAMI = System.getProperty('casAMI', null)
+    espAMI = System.getProperty('espAMI', null)
+    platformAMI = System.getProperty('platformAMI', null)
+    user = (System.getenv('USER') != null) ? System.getenv('USER') : System.getenv('USERNAME')
+    stackOwner = System.getProperty('owner', null)
+    adminEmail = System.getProperty('adminEmail', null)
+    excludeParams = System.getProperty('excludeParams', "")
+    region = System.getProperty('region', "us-east-1")
+    vpcId = System.getProperty('vpcId', null)
+    bucket = System.getProperty('bucket', "ci-360-deployment-dev-us-east-1")
+    baseStack = System.getProperty('baseStack', "dev-base")
+    configStack = System.getProperty('configStack', null)
+    stackPrefix = System.getProperty('stack', null)               // required for uploadSyncS3
+    stackBucket = System.getProperty('stackBucket', stackPrefix)  // required for uploadSyncS3
+    s3ToolsPrefix = System.getProperty('s3ToolsPrefix', null)
+    s3DevopsToolsPrefix = System.getProperty('s3DevopsToolsPrefix', null)
+    s3TestToolsPrefix = System.getProperty('s3TestToolsPrefix', null)
+    //-------------------------------------------------------------
+    // Artifact type, CodeDeploy and other build overrides
+    //-------------------------------------------------------------
+    if (branch.equals("master")) {
+        if (buildType.equals("release")) {
+            // these are MILESTONE artifacts
+            buildVerQuantifier = "MILESTONE"
+            if (stackPrefix.equals("latest09")) {         // regional service
+                region = "us-east-1"
+                stackPrefix = "latest09"
+                if (stackBucket != null && !stackBucket.equals("${buildRelease}")) {
+                    println "***** (CI360) Setting stackBucket to '${buildRelease}' for branch="+branch+" due to buildType="+buildType+" and stack="+stackPrefix
+                }
+                stackBucket = "${buildRelease}"  // use buildRelease bucket instead of branch name
+                baseStack = "latest09-base"
+                configStack = "latest09-mkt-config"
+            } else if (stackPrefix.equals("dev")) {       // regional service
+                region = "us-east-1"
+                if (stackBucket != null && !stackBucket.equals("${buildRelease}")) {
+                    println "***** (CI360) Setting stackBucket to '${buildRelease}' for branch="+branch+" due to buildType="+buildType+" and stack="+stackPrefix
+                }
+                stackBucket = "${buildRelease}"  // use buildRelease bucket instead of branch name
+                baseStack = "dev-base"
+                configStack = "dev-mkt-config"
+            } else {
+                // only upload artifacts and disable deploy
+                // allow artifact publish to repo, since the stackPrefix is ignored for release builds to Test and Prod
+                println "***** (CI360) Disabling artifact deploy and smoke tests for branch="+branch+" due to buildType="+buildType+" and stack="+stackPrefix
+                stackPrefix = null
+            }
+        } else {
+            // these are NOT milestone artifacts
+            buildVerQuantifier = "SNAPSHOT"
+            // this is not an official milestone build, so disable publishing artifacts
+            buildUploadArchives = false
+            println "***** (CI360) Disabling artifact upload, deploy and smoke tests for branch="+branch+" due to buildType="+buildType
+            stackPrefix = null
+            stackBucket = null
+        }
+        // path to common tools, like convoy
+        if ((s3ToolsPrefix == null) || (s3ToolsPrefix.isEmpty())) {
+            s3ToolsPrefix = "CodeDeploy/release/latest09"
+        }
+    } else if (branch.matches("v[0-9]{4}")) {
+        if (buildType.equals("release")) {
+            // these are release artifacts
+            buildVerQuantifier = "RELEASE"
+            // only upload artifacts to us-east and disable deploy
+            region = "us-east-1"
+            bucket = "ci-360-deployment-dev-us-east-1"
+            stackBucket = branch    // should be a v1* release branch
+            baseStack = "none"
+            configStack = "none"
+            println "***** (CI360) Disabling artifact deploy and smoke tests for branch="+branch+" due to buildType="+buildType+" and stack="+stackPrefix
+            stackPrefix = null
+        } else {
+            // these are NOT release artifacts
+            buildVerQuantifier = "SNAPSHOT"
+            // this is not a release build, so disable publishing artifacts
+            buildUploadArchives = false
+            // only upload artifacts and disable deploy
+            println "***** (CI360) Disabling artifact deploy and smoke tests for branch="+branch+" due to buildType="+buildType
+            stackBucket = branch    // should be a v1* release branch
+            stackPrefix = null
+        }
+        // path to common tools, like convoy
+        if ((s3ToolsPrefix == null) || (s3ToolsPrefix.isEmpty())) {
+            s3ToolsPrefix = "CodeDeploy/release/${branch}"
+        }
+    } else if (branch.equals("staging")) {
+        // Local or Jenkins _stage builds
+        if ("dev".equals(stackPrefix) || "master".equals(stackPrefix) || "latest09".equals(stackPrefix) ||
+                "tst".equals(stackPrefix) || "int".equals(stackPrefix) || "eurc".equals(stackPrefix) ||
+                "stage".equals(stackPrefix) || "prod".equals(stackPrefix) ) {
+            // don't allow staging builds to touch or create shadows of pipeline stacks
+            throw new GradleException("!!!!! (CI360) ERROR - Cannot use stackPrefix=${stackPrefix} for staging builds")
+        }
+        // these are SNAPSHOT artifacts
+        buildVerQuantifier = "SNAPSHOT"
+        if (!buildType.equals("team")) {
+            // only team buildType should publish artifacts for this branch
+            println "***** (CI360) Disabling artifact upload to Nexus and setting buildType=personal for non-team build of staging"
+            buildUploadArchives = false
+            buildType = "personal"
+            if (stackPrefix != null)
+                stackBucket = stackPrefix
+            else
+                stackBucket = branch
+            // don't override the stackPrefix, as we want to use the -Dstack value if it was provided
+            // stackPrefix = null
+        }
+        // path to common tools, like convoy
+        if ((s3ToolsPrefix == null) || (s3ToolsPrefix.isEmpty())) {
+            s3ToolsPrefix = "CodeDeploy/release/latest09"
+        }
+    } else {
+        // Default case to handle local or Jenkins _review builds
+        if ("staging".equals(stackPrefix) || "dev".equals(stackPrefix) || "master".equals(stackPrefix) ||
+                "tst".equals(stackPrefix) || "int".equals(stackPrefix) || "eurc".equals(stackPrefix) ||
+                "stage".equals(stackPrefix) || "prod".equals(stackPrefix) || "latest09".equals(stackPrefix)) {
+            // don't allow local builds to touch or create shadows of pipeline stacks
+            throw new GradleException("!!!!! (CI360) ERROR - Cannot use stackPrefix=${stackPrefix} for Local or Jenkins _review builds")
+        }
+        if (buildType.equals("release")) {
+            throw new GradleException("!!!!! (CI360) ERROR - Cannot use buildType=${buildType} for local builds")
+        }
+        // these are NOT milestone or release artifacts
+        buildVerQuantifier = "SNAPSHOT"
+        // this is not a release, master or staging branch build, so disable publishing artifacts to the repo
+        buildUploadArchives = false
+        println "***** (CI360) Disabling artifact deploy and setting buildType=personal for local builds"
+        buildType = "personal"
+        if (stackPrefix != null)
+            stackBucket = stackPrefix
+        else
+            stackBucket = branch
+        // don't override the stackPrefix, as we want to use the -Dstack value if it was provided
+        // stackPrefix = branch
+        // path to common tools, like convoy
+        if ((s3ToolsPrefix == null) || (s3ToolsPrefix.isEmpty())) {
+            s3ToolsPrefix = "CodeDeploy/release/latest09"
+        }
+    }
+    //-------------------------------------------------------------
+    // Set project VERSION based on determined artifact type above
+    //-------------------------------------------------------------
+    if ("SNAPSHOT".equals(buildVerQuantifier)) {
+        project.version = "1.${buildSprint}.0-${buildVerQuantifier}"
+    } else if ("MILESTONE".equals(buildVerQuantifier)) {
+        project.version = "1.${buildSprint}.0-m.${buildTimestamp}"
+    } else if ("RELEASE".equals(buildVerQuantifier)) {
+        project.version = "1.${buildSprint}.${buildTimestamp}"
+    } else {
+        throw new GradleException("!!!!! ERROR - Unsupported buildVerQuantifier=${buildVerQuantifier} !!!!!")
+    }
+    // provide a property for places we can't use 'version', like copy filters
+    buildVersion = project.version
+    if ((buildType.equals("personal")) || (buildLevel.startsWith("dev")) || (gitCommit.equals("unknown"))) {
+        // for personal builds use 'dev-buildSprint-buildTimestamp' for Docker tags
+        dockerVersion = buildLevel
+    }
+    else {
+        //provide a release style version for release Docker tags
+        dockerVersion = "1.${buildSprint}.${buildTimestamp}"
+    }
+    // this will be set by isDockerInstalled during builds needing Docker
+    hasDocker = false
+    // determine when we can push images and tags to AWS ECR
+    uploadDockerImages = (buildUploadArchives || ((stackBucket != null) && (!stackBucket.isEmpty()) && (stackPrefix != null) && (!stackPrefix.isEmpty())))
+    if (requireDocker.toLowerCase().equals('disabled')) {
+        uploadDockerImages = false
+    }
+    // for Jenkins _review builds don't upload images or push tags
+    if ((buildType.equals("personal")) && (buildLevel.startsWith("1"))) {
+        dockerVersion = "dev-${buildSprint}-${buildTimestamp}"
+        uploadDockerImages = false
+    }
+    // handle offline mode
+    if (project.getGradle().startParameter.isOffline()) {
+        buildUploadArchives = false
+        stackBucket = null
+        stackPrefix = null
+        uploadDockerImages = false
+    }
+    //-------------------------------------------------------------
+    // Additional build and AWS parameter setup after overrides
+    //-------------------------------------------------------------
+    if ((buildUploadArchives == true) && (buildType.equals("personal") || buildLevel.startsWith("dev") || gitCommit.equals("unknown"))) {
+        println path+" - (CI360) Disabling upload of artifacts to Nexus repository!!!"
+        buildUploadArchives = false
+    }
+    if (stackBucket != null) {
+        s3Prefix = System.getProperty('prefix', "CodeDeploy/${buildType}/${stackBucket}")
+        objectPath = System.getProperty('objectPath', "CodeDeploy/${buildType}/${stackBucket}/"+cloudProject)   // used by uploadSyncS3
+        s3ObjectPath = "https://s3.amazonaws.com/${bucket}/${objectPath}"
+    } else {
+        s3Prefix = System.getProperty('prefix', null)
+        objectPath = System.getProperty('objectPath', null)   // used by uploadSyncS3
+        s3ObjectPath = System.getProperty('s3Url', null)
+    }
+    // initialize empty artifact path for uploadSyncS3 tasks
+    artifactPath = ""
+    // set path to common DevOps tools, like convoy, if not provided
+    if ((s3DevopsToolsPrefix == null) || (s3DevopsToolsPrefix.isEmpty())) {
+        s3DevopsToolsPrefix = s3ToolsPrefix
+    }
+    // set path to common Test tools, like Lev0/1 tests, if not provided
+    if ((s3TestToolsPrefix == null) || (s3TestToolsPrefix.isEmpty())) {
+        s3TestToolsPrefix = s3ToolsPrefix
+    }
+    s3ToolsPath = "s3://${bucket}/${s3ToolsPrefix}"
+    s3DevopsToolsPath = "s3://${bucket}/${s3DevopsToolsPrefix}"
+    s3TestToolsPath = "s3://${bucket}/${s3TestToolsPrefix}"
+}

@@ -1,0 +1,314 @@
+// externalize dependency definitions below
+ext {
+    versions = [:]
+    libraries = [:]
+}
+
+// Define Gradle and plugin versions used in the build scripts
+versions.gradle = '2.14.1'
+versions.ant_junit = '1.9.6'    // matches Gradle 2.14.1 provided ANT
+versions.asciidoctor = '1.5.6'
+versions.avro_plugin = '0.9.0'
+versions.aws_plugin = '0.38'
+versions.dependency_management_plugin = '1.0.5.RELEASE'
+versions.findbugs = '3.0.1'
+versions.jacoco = '0.7.8'
+versions.gradle_dependency_lock = '4.9.4'
+versions.gradle_python_envs = '0.0.10'
+versions.sas_mkt_gradle_pangea = '1.1812.+'           // use a specific minor release of mkt-gradle-pangea
+versions.owasp = '1.4.3'
+versions.sas_gradle_cdp_dependency_validator = '1.+'  // grab the latest for matching pangea
+versions.sas_gradle_owasp_dc_suppressions = '1.0.+'   // grab the latest for matching validator
+
+
+// Define third-party package versions used below
+versions.avro = '1.8.2'
+versions.aws_java_sdk = '1.11.267'
+versions.aws_xray_sdk_bom = '1.1.0'
+versions.bouncycastle = '1.60'
+versions.confluent = '5.0.1'
+versions.kafka = '2.0.0'
+versions.opensaml='2.6.4'
+versions.springfox = '2.5.0'
+versions.springShell = '1.2.0.RELEASE'
+versions.springBoot = '1.5.20.RELEASE'
+// NOTE:  You also have to update the following in the root build.gradle file -
+//    classpath "org.springframework.boot:spring-boot-gradle-plugin:1.5.20.RELEASE"
+// following versions are based on spring-boot-dependencies from version used above
+versions.groovy = '2.4.16'
+versions.gson = '2.8.5'
+versions.jackson = '2.9.8'
+versions.jacksonBom = '2.9.8'
+versions.jacksonDatabind = '2.9.8'
+versions.logback = '1.2.3'
+versions.postgresql = '9.4.1212.jre7'
+versions.slf4j = '1.7.26'
+versions.spring = '4.3.23.RELEASE'
+versions.springCloud = '1.3.4.RELEASE'
+versions.springSecurity = '4.2.12.RELEASE'
+versions.springRetry = '1.2.4.RELEASE'
+versions.springWS = '2.4.5.RELEASE'
+versions.xml_apis='1.4.01'
+
+// Define pointers to Spring BoMs for dependency management
+libraries.spring_boot_dependencies = "org.springframework.boot:spring-boot-dependencies:${versions.springBoot}"
+libraries.spring_framework_bom = "org.springframework:spring-framework-bom:${versions.spring}"
+
+// Define common internal SAS dependency versions from Viya 17w47 CDP repo - DO NOT MODIFY
+// NOTE:  The following definitions should only be used by the mkt-shared projects and for resolutionStrategy below
+libraries.sas_viya_platform_dependencies = 'com.sas.commons:sas-viya-platform-dependencies:2.1.8'   // 17w47
+libraries.sas_commons_antlr = 'com.sas.commons:commons-antlr:2.1.15'        // pulls in antlr-4.5.3
+libraries.sas_commons_context = 'com.sas.commons:commons-context:2.0.11'
+libraries.sas_commons_expr = 'com.sas.commons:commons-expr:3.2.14'
+libraries.sas_commons_logging = 'com.sas.commons:commons-logging:2.0.11'
+libraries.sas_commons_rest = 'com.sas.mkt.shared:mkt-shared-commons-rest:3.3.1906'         // DO NOT USE the Viya com.sas.commons:commons-rest
+libraries.sas_commons_rest_client = 'com.sas.mkt.shared:mkt-shared-rest-client:2.1.1906'   // DO NOT USE real com.sas.commons:commons-rest-client>1.1.21 will pull in Consul and break us
+libraries.sas_commons_rest_l10n = 'com.sas.commons:commons-rest-l10n:2.2.5'
+libraries.sas_commons_rest_representations = 'com.sas.commons:commons-rest-representations:2.1.12'
+libraries.sas_svcs_preferences_representations = 'com.sas.svcs:preferences-representations:2.0.12'
+libraries.sas_security_auth_annotations = 'com.sas.security:authorization-annotations:4.0.12'
+
+// Other SAS or Viya dependencies in Artifactory
+libraries.sas_cas_cas_client = 'com.sas.cas:cas-client:3.2.9'
+libraries.sas_esp_pubsub_client_v43 = 'com.sas.esp:esp-pubsub-client:4.3.1341'
+libraries.sas_security_oauth2 = 'com.sas.security:oauth2:4.1.1'
+libraries.sas_security_oauth2_cas_client = 'com.sas.security:oauth2-cas-client:4.1.1'
+
+// Define common SAS v94 dependency versions from Nexus SAS_content repo
+ext.sas = [ // Groovy map literal
+    esp_client_api: '302000.0.0.20151028211022_d4esp32',        // used by mkt-extapigw-sdk
+    sas_lasr: '970001.0.0.20161113172643_d415lsr2ca',           // used by mkt-reporting
+    sas_core: '904300.5.0.20150513190000_v940m3',               // used by mkt-infra
+    sas_core_v940m5: '904500.0.0.20170816190000_v940m5'
+]
+
+
+// Define common APPROVED TPJ dependency versions from Viya CDP repo here -
+// Verify approval by checking following repos -
+//     http://ivy.fyi.sas.com/Repositories/vert/ThirdParty/v940/TPJ_content/tpb/
+//     https://reartifact.unx.sas.com/artifactory/cdp/
+// Check transitive dependency versions at https://mvnrepository.com/artifact/
+libraries.apache_pdfbox = "org.apache.pdfbox:pdfbox:1.6.0"
+libraries.apache_pdfbox2 = "org.apache.pdfbox:pdfbox:2.0.3"
+libraries.apache_poi="org.apache.poi:poi:3.14"
+libraries.apache_poi_ooxml="org.apache.poi:poi-ooxml:3.14"
+libraries.apache_tika="org.apache.tika:tika-core:1.20"
+libraries.asciidoctorj_pdf = 'org.asciidoctor:asciidoctorj-pdf:1.5.0-alpha.16'
+libraries.aspectjweaver = 'org.aspectj:aspectjweaver:1.8.13'
+// DON'T USE libraries.aws_java_sdk, as that may pull in different versions of AWS depends than what we have cleared
+libraries.aws_java_sdk = "com.amazonaws:aws-java-sdk:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_apigw = "com.amazonaws:aws-java-sdk-api-gateway:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_bom = "com.amazonaws:aws-java-sdk-bom:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_core = "com.amazonaws:aws-java-sdk-core:${versions.aws_java_sdk}@jar"
+libraries.aws_java_sdk_autoscaling = "com.amazonaws:aws-java-sdk-autoscaling:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_cloudformation = "com.amazonaws:aws-java-sdk-cloudformation:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_cloudsearch = "com.amazonaws:aws-java-sdk-cloudsearch:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_cloudwatch = "com.amazonaws:aws-java-sdk-cloudwatch:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_dynamodb = "com.amazonaws:aws-java-sdk-dynamodb:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_ec2 = "com.amazonaws:aws-java-sdk-ec2:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_elastictranscoder = "com.amazonaws:aws-java-sdk-elastictranscoder:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_emr = "com.amazonaws:aws-java-sdk-emr:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_events = "com.amazonaws:aws-java-sdk-events:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_iam = "com.amazonaws:aws-java-sdk-iam:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_lambda = "com.amazonaws:aws-java-sdk-lambda:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_logs = "com.amazonaws:aws-java-sdk-logs:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_s3 = "com.amazonaws:aws-java-sdk-s3:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_swf = "com.amazonaws:aws-java-sdk-simpleworkflow:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_swf_libraries = "com.amazonaws:aws-java-sdk-swf-libraries:1.11.22"
+libraries.aws_java_sdk_sns = "com.amazonaws:aws-java-sdk-sns:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_sqs = "com.amazonaws:aws-java-sdk-sqs:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_ssm = "com.amazonaws:aws-java-sdk-ssm:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_ses = "com.amazonaws:aws-java-sdk-ses:${versions.aws_java_sdk}"
+libraries.aws_java_sdk_xray = "com.amazonaws:aws-java-sdk-xray:${versions.aws_java_sdk}"
+libraries.aws_lambda_core = 'com.amazonaws:aws-lambda-java-core:1.1.0'
+libraries.aws_lambda_events = 'com.amazonaws:aws-lambda-java-events:1.3.0'
+libraries.aws_lambda_log4j = 'com.amazonaws:aws-lambda-java-log4j:1.0.0'
+libraries.aws_xray_recorder_sdk_bom = "com.amazonaws:aws-xray-recorder-sdk-bom:${versions.aws_xray_sdk_bom}"
+libraries.aws_xray_recorder_sdk_core = "com.amazonaws:aws-xray-recorder-sdk-core:${versions.aws_xray_sdk_bom}"
+libraries.aws_xray_recorder_sdk_aws_sdk = "com.amazonaws:aws-xray-recorder-sdk-aws-sdk:${versions.aws_xray_sdk_bom}"
+libraries.aws_xray_recorder_sdk_aws_sdk_instrumentor = "com.amazonaws:aws-xray-recorder-sdk-aws-sdk-instrumentor:${versions.aws_xray_sdk_bom}"
+libraries.bouncycastle_kix="org.bouncycastle:bcpkix-jdk15on:${versions.bouncycastle}"
+libraries.cglib_nodep = 'cglib:cglib-nodep:3.1'
+libraries.com_google_protobuf_protobuf_java = 'com.google.protobuf:protobuf-java:2.6.1'
+libraries.commons_beanutils = 'commons-beanutils:commons-beanutils:1.9.3@jar'
+libraries.commons_cli = 'commons-cli:commons-cli:1.3.1@jar'
+libraries.commons_codec = 'commons-codec:commons-codec:1.10@jar'
+libraries.commons_collections = 'commons-collections:commons-collections:3.2.2@jar'
+libraries.commons_dbcp = 'commons-dbcp:commons-dbcp:1.4'
+libraries.commons_exec = "org.apache.commons:commons-exec:1.3"
+libraries.commons_fileupload = "commons-fileupload:commons-fileupload:1.3.3"
+// Need to force 2.5 over 2.4 for High Vulnerability fix
+libraries.commons_io = 'commons-io:commons-io:2.5'
+// Need to force 2.6 over 2.4 for High Vulnerability fix
+libraries.commons_lang2 = 'commons-lang:commons-lang:2.6'
+libraries.commons_lang3 = 'org.apache.commons:commons-lang3:3.7'
+libraries.commons_logging = 'commons-logging:commons-logging:1.1.3@jar'
+libraries.commons_math3 = 'org.apache.commons:commons-math3:3.5'
+libraries.commons_pool2 = 'org.apache.commons:commons-pool2:2.4.3@jar'
+libraries.deviceatlas_carrierapi = "com.device.atlas:deviceatlas-carrierapi:2.0.1"
+libraries.deviceatlas_common = "com.device.atlas:deviceatlas-common:2.0.1"
+libraries.deviceatlas_deviceapi = "com.device.atlas:deviceatlas-deviceapi:2.0.1"
+libraries.findbugs_annotations = "com.google.code.findbugs:findbugs-annotations:${versions.findbugs}"
+libraries.findbugs_jsr305 = "com.google.code.findbugs:jsr305:${versions.findbugs}"
+libraries.hamcrest_all = 'org.hamcrest:hamcrest-all:1.3'
+libraries.hibernate_validator = 'org.hibernate:hibernate-validator:5.3.6.Final'
+libraries.hoverfly = 'io.specto:hoverfly-java:0.9.3'
+libraries.httpclient = 'org.apache.httpcomponents:httpclient:4.5.6'
+libraries.httpcore = 'org.apache.httpcomponents:httpcore:4.4.10'
+libraries.hsql = 'org.hsqldb:hsqldb:2.3.6'
+libraries.icu4j = "com.ibm.icu:icu4j:61.1"
+libraries.im4java = "org.im4java:im4java:1.4.0"
+libraries.liquibase = 'org.liquibase:liquibase-core:3.5.5'
+libraries.jackson = [
+    "com.fasterxml.jackson.core:jackson-core:${versions.jackson}@jar",
+    "com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}@jar",
+    "com.fasterxml.jackson.core:jackson-databind:${versions.jacksonDatabind}@jar"
+]
+libraries.jackson_bom = "com.fasterxml.jackson:jackson-bom:${versions.jacksonBom}"
+libraries.jackson_databind = "com.fasterxml.jackson.core:jackson-databind:${versions.jacksonDatabind}"
+libraries.jackson_core_asl="org.codehaus.jackson:jackson-core-asl:1.9.13"
+libraries.jackson_mapper_asl = 'org.codehaus.jackson:jackson-mapper-asl:1.9.13'
+// Need to force 3.18.2-GA over 3.18.1-GA for High Vulnerability fix
+libraries.javassist = 'org.javassist:javassist:3.21.0-GA'
+libraries.javax_jms_api = "javax.jms:jms:1.1"
+libraries.javax_validation_api = "javax.validation:validation-api:1.1.0.Final"
+libraries.jcip_annotations="net.jcip:jcip-annotations:1.0"
+libraries.jedis = 'redis.clients:jedis:2.9.0@jar'
+libraries.joda = 'joda-time:joda-time:2.9.9'
+libraries.jodconverter_core = "com.github.livesense:jodconverter-core:1.0.5"
+libraries.jsonwebtoken = 'io.jsonwebtoken:jjwt:0.9.0@jar'
+libraries.groovy_all = "org.codehaus.groovy:groovy-all:${versions.groovy}"
+libraries.gson = "com.google.code.gson:gson:${versions.gson}@jar"
+libraries.guava = 'com.google.guava:guava:23.0'
+libraries.junit = 'junit:junit:4.12@jar'
+libraries.junit4 = libraries.junit
+libraries.avro = "org.apache.avro:avro:${versions.avro}@jar"
+libraries.avro_ipc = "org.apache.avro:avro-ipc:${versions.avro}@jar"
+libraries.kafka_clients = "org.apache.kafka:kafka-clients:${versions.kafka}@jar"
+libraries.kafka_streams = "org.apache.kafka:kafka-streams:${versions.kafka}@jar"
+libraries.kafka_connect_api = "org.apache.kafka:connect-api:${versions.kafka}"
+libraries.kafka_confluent_avro = "io.confluent:kafka-avro-serializer:${versions.confluent}"
+libraries.kafka_schema_registry = "io.confluent:kafka-schema-registry:${versions.confluent}"
+libraries.rocksdb = "org.rocksdb:rocksdbjni:5.0.1"
+libraries.zkclient = 'com.101tec:zkclient:0.10'
+libraries.log4j = 'log4j:log4j:1.2.17@jar'
+libraries.logback_classic = "ch.qos.logback:logback-classic:${versions.logback}"
+libraries.logback_core = "ch.qos.logback:logback-core:${versions.logback}"
+libraries.logback_parent = "ch.qos.logback:logback-parent:${versions.logback}"
+libraries.metrics_annotation = 'io.dropwizard.metrics:metrics-annotation:3.1.5@jar'
+libraries.metrics_core = 'io.dropwizard.metrics:metrics-core:3.1.5@jar'
+libraries.metrics_jvm = 'io.dropwizard.metrics:metrics-jvm:3.1.5@jar'
+libraries.metrics_json = 'io.dropwizard.metrics:metrics-json:3.1.5@jar'
+libraries.metrics_servlet = 'io.dropwizard.metrics:metrics-servlet:3.1.5@jar'
+libraries.metrics_servlets = 'io.dropwizard.metrics:metrics-servlets:3.1.5@jar'
+libraries.metrics_healthchecks = 'io.dropwizard.metrics:metrics-healthchecks:3.1.5@jar'
+libraries.metrics_spring = 'com.ryantenney.metrics:metrics-spring:3.1.3@jar'
+libraries.mockito_all = 'org.mockito:mockito-all:1.10.19@jar'
+libraries.mockito2_core = 'org.mockito:mockito-core:2.15.0@jar'
+libraries.mvel2 = 'org.mvel:mvel2:2.2.0.Final@jar'
+libraries.mybatis = 'org.mybatis:mybatis:3.4.5'
+libraries.mybatis_spring = 'org.mybatis:mybatis-spring:1.3.0'
+libraries.objenesis = 'org.objenesis:objenesis:2.2'
+libraries.openoffice_unoil = "org.openoffice:unoil:4.1.4"
+libraries.openoffice_juh = "org.openoffice:juh:4.1.4"
+libraries.openoffice_jurt = "org.openoffice:jurt:4.1.4"
+libraries.openoffice_ridl = "org.openoffice:ridl:4.1.4"
+libraries.opensaml="org.opensaml:opensaml:${versions.opensaml}"
+libraries.org_json = 'org.json:org.json:2.0'
+libraries.postgresql = "org.postgresql:postgresql:${versions.postgresql}"
+libraries.quartz = 'org.quartz-scheduler:quartz:2.2.3'
+libraries.rest_assured = [
+    'io.rest-assured:rest-assured:3.0.1',
+    'io.rest-assured:json-schema-validator:3.0.1'
+]
+libraries.servlet_api = 'javax.servlet:javax.servlet-api:3.1.0@jar'
+libraries.slf4j_api = "org.slf4j:slf4j-api:${versions.slf4j}"
+libraries.slf4j_jcl = "org.slf4j:slf4j-jcl:${versions.slf4j}"
+libraries.slf4j_log4j = "org.slf4j:log4j-over-slf4j:${versions.slf4j}"
+libraries.spock_core = 'org.spockframework:spock-core:1.0-groovy-2.4'
+libraries.spock_spring = 'org.spockframework:spock-spring:1.0-groovy-2.4'
+libraries.spring_boot = "org.springframework.boot:spring-boot:${versions.springBoot}"
+libraries.spring_boot_autoconfigure = "org.springframework.boot:spring-boot-autoconfigure:${versions.springBoot}"
+libraries.spring_boot_starter = "org.springframework.boot:spring-boot-starter:${versions.springBoot}"
+libraries.spring_boot_starter_actuator = "org.springframework.boot:spring-boot-starter-actuator:${versions.springBoot}"
+libraries.spring_boot_starter_data_rest = "org.springframework.boot:spring-boot-starter-data-rest:${versions.springBoot}"
+libraries.spring_boot_starter_data_jpa = "org.springframework.boot:spring-boot-starter-data-jpa:${versions.springBoot}"
+//libraries.spring_boot_starter_log4j = "org.springframework.boot:spring-boot-starter-log4j:1.3.8.RELEASE"
+libraries.spring_boot_starter_log4j = "org.springframework.boot:spring-boot-starter-log4j2:${versions.springBoot}"
+libraries.spring_boot_starter_test = "org.springframework.boot:spring-boot-starter-test:${versions.springBoot}"
+libraries.spring_boot_starter_tomcat = "org.springframework.boot:spring-boot-starter-tomcat:${versions.springBoot}"
+libraries.spring_boot_starter_web = "org.springframework.boot:spring-boot-starter-web:${versions.springBoot}"
+libraries.spring_boot_starter_validation = "org.springframework.boot:spring-boot-starter-validation:${versions.springBoot}"
+libraries.spring_beans = "org.springframework:spring-beans:${versions.spring}"
+libraries.spring_cloud_context = "org.springframework.cloud:spring-cloud-context:${versions.springCloud}"
+libraries.spring_cloud_sleuth_core = "org.springframework.cloud:spring-cloud-sleuth-core:${versions.springCloud}"
+libraries.spring_cloud_starter_hystrix_dashboard = "org.springframework.cloud:spring-cloud-starter-hystrix-dashboard:${versions.springCloud}"
+libraries.spring_cloud_starter_hystrix = "org.springframework.cloud:spring-cloud-starter-hystrix:${versions.springCloud}"
+libraries.spring_core = "org.springframework:spring-core:${versions.spring}"
+libraries.spring_context = "org.springframework:spring-context:${versions.spring}"
+libraries.spring_context_support = "org.springframework:spring-context-support:${versions.spring}"
+libraries.spring_data_dynamodb = 'com.github.derjust:spring-data-dynamodb:4.2.0'
+libraries.spring_integration = 'org.springframework.integration:spring-integration-core:4.3.17.RELEASE' //version.spring i.e. 4.3.18 is not available
+libraries.spring_jms = "org.springframework:spring-jms:${versions.spring}"
+libraries.spring_kafka_test = 'org.springframework.kafka:spring-kafka-test:2.0.1.RELEASE'
+libraries.spring_orm = "org.springframework:spring-orm:${versions.spring}"
+libraries.spring_shell = "org.springframework.shell:spring-shell:${versions.springShell}"
+libraries.spring_retry = "org.springframework.retry:spring-retry:${versions.springRetry}"
+libraries.spring_security_bom = "org.springframework.security:spring-security-bom:${versions.springSecurity}"
+libraries.spring_security_cas = "org.springframework.security:spring-security-cas:${versions.springSecurity}"
+libraries.spring_security_core = "org.springframework.security:spring-security-core:${versions.springSecurity}"
+libraries.spring_test = "org.springframework:spring-test:${versions.spring}"
+// libraries.spring_test_mvc = 'org.springframework:spring-test-mvc:1.0.0.BUILD'
+libraries.spring_web = "org.springframework:spring-web:${versions.spring}"
+libraries.spring_webmvc = "org.springframework:spring-webmvc:${versions.spring}"
+libraries.spring_websocket = "org.springframework:spring-websocket:${versions.spring}"
+libraries.spring_ws_core = "org.springframework.ws:spring-ws-core:${versions.springWS}"
+libraries.springfox_staticdocs = "io.springfox:springfox-staticdocs:${versions.springfox}"
+libraries.springfox_swagger2 = "io.springfox:springfox-swagger2:${versions.springfox}"
+libraries.springfox_swagger_ui = "io.springfox:springfox-swagger-ui:${versions.springfox}"
+libraries.wiremock = 'com.github.tomakehurst:wiremock:2.6.0'
+libraries.xml_apis="xml-apis:xml-apis:${versions.xml_apis}"
+
+// @@@TEMPLATE@@@
+// Place project unique dependancies here until we merge them back into the template
+// Add yours here...
+//
+
+// force the versions of SAS and Spring dependencies across all project builds
+configurations.all {
+    // next 8 are to resolve High Vulnerablities
+    resolutionStrategy.force libraries.commons_io
+    resolutionStrategy.force libraries.commons_lang2
+    resolutionStrategy.force libraries.jackson_bom
+    resolutionStrategy.force libraries.jackson_databind
+    resolutionStrategy.force libraries.javassist
+    resolutionStrategy.force libraries.icu4j
+    resolutionStrategy.force libraries.logback_parent
+    resolutionStrategy.force libraries.logback_classic
+    resolutionStrategy.force libraries.logback_core
+    // force specific versions of our Spring dependencies
+    resolutionStrategy.force libraries.spring_boot_dependencies
+    resolutionStrategy.force libraries.spring_boot_autoconfigure
+    resolutionStrategy.force libraries.spring_framework_bom
+    resolutionStrategy.force libraries.spring_context
+    resolutionStrategy.force libraries.spring_core
+    resolutionStrategy.force libraries.spring_security_bom
+    resolutionStrategy.force libraries.spring_security_core
+    resolutionStrategy.force libraries.springfox_swagger2
+    // next 7 are for mkt-shared-commons-rest
+    resolutionStrategy.force libraries.sas_commons_context
+    resolutionStrategy.force libraries.sas_commons_expr
+    resolutionStrategy.force libraries.sas_commons_logging
+    resolutionStrategy.force libraries.sas_commons_rest
+    resolutionStrategy.force libraries.sas_commons_rest_client
+    resolutionStrategy.force libraries.sas_commons_rest_representations
+    resolutionStrategy.force libraries.sas_svcs_preferences_representations
+    resolutionStrategy.force libraries.httpcore
+    resolutionStrategy.force libraries.httpclient
+    resolutionStrategy.force libraries.joda
+    resolutionStrategy.force libraries.org_json
+    resolutionStrategy.force libraries.aws_java_sdk_bom
+    resolutionStrategy.force libraries.groovy_all
+    // next 1 is for opensaml
+    resolutionStrategy.force libraries.bouncycastle_kix
+}

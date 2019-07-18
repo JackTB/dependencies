@@ -1,0 +1,85 @@
+// common artifact repository configuration setup for our builds
+
+apply plugin: 'maven'
+
+ext.layoutPatternSAS = {
+    ivy '/[organisation]/[module]/[revision]/ivy.xml'
+    artifact '/[organisation]/[module]/[revision]/[artifact].[ext]'
+}
+
+ext.layoutPatternTPJ = {
+    ivy '/[organisation]/tpb/[module]/[revision]/ivy.xml'
+    artifact '/[organisation]/tpb/[module]/[revision]/[artifact].[ext]'
+}
+
+ext.layoutPatternNexus = {
+    ivy '/[organisation]/[module]/[revision]/ivy.xml'
+    artifact '/[organisation]/[module]/[revision]/[artifact].[ext]'
+}
+
+repositories {
+    // allow using locally published SNAPSHOTS
+    mavenLocal()
+    // following pulls in our TPJ, SAS, MKT release/snapshots and SAS svcartifact release/snapshot plugins
+    maven {
+        url "${ci_nexus_repo_contextUrl}/content/groups/internal"
+    }
+    ivy {
+        url "${ci_nexus_repo_contextUrl}/content/repositories"
+        layout "pattern", layoutPatternNexus
+    }
+    // We should only use the Nexus Repo cache of maven central for buildscript Gradle depends and personal branches
+    maven {
+        url "${ci_nexus_repo_contextUrl}/content/groups/external"
+    }
+    /***
+     * Temporary - pull SAS depends from sasivy - Pulling from Nexus TPJ_content and SAS_content now!
+     *
+        ivy {
+            url "http://ivy.fyi.sas.com/Repositories/vert/wky/v940m3/DEVD/ivy-repo"
+            layout "pattern", layoutPatternSAS
+        }
+        ivy {
+            url "http://ivy.fyi.sas.com/Repositories/vert/wky/d4esp32/DEVD/ivy-repo"
+            layout "pattern", layoutPatternSAS
+        }
+    */
+    /***
+     * We should be building all of our depends
+     *
+        ivy {
+            url "http://ivy.fyi.sas.com/Repositories/vert/day/d4mkt1601/DEVD/ivy-repo"
+            layout "pattern", layoutPatternSAS
+        }
+    */
+}
+
+// The following CDP setup requires ORG_GRADLE_PROJECT_<keyName> to be defined in Jenkins Global
+// credentials and passed in by the normal Credentials plugin.
+// NOTE:  The following doesn't work if the Credentials Bindling plugin is installed
+def mavenRepositoryAuthentication = [
+    userName: project.properties['repository_user'],
+    password: project.properties['repository_password']
+]
+
+// For now, we're injecting these into the build as ORG_GRADLE_PROJECT_*
+// You can inject into local builds using -PnexusUsername and -PnexusPassword
+def nexusRepositoryAuthentication = [
+    userName: project.properties['nexusUsername'],
+    password: project.properties['nexusPassword']
+]
+
+uploadArchives {
+    repositories.mavenDeployer {
+        repository(url: project.properties['ci_nexus_repo_contextUrl'] + "/content/repositories/releases") {
+            authentication nexusRepositoryAuthentication
+        }
+        snapshotRepository(url: project.properties['ci_nexus_repo_contextUrl'] + "/content/repositories/snapshots") {
+            authentication nexusRepositoryAuthentication
+            // if gradle-local.properties use -
+            //     authentication( userName: ${nexusUsername}, password: ${nexusPassword})
+            // if setting as ENV vars use
+            //     authentication( userName: "$System.env.nexusUsername", password: "$System.env.nexusPassword")
+        }
+    }
+}

@@ -1,0 +1,15 @@
+// NOTE:  If not included in the rootDir/build.gradle, then you will need to
+//        add the following in the buildScript classpath of your build.gradle
+// CI360 and SAS CDP plugins
+// classpath "com.netflix.nebula:gradle-dependency-lock-plugin:${versions.gradle_dependency_lock}"
+
+apply plugin: "nebula.dependency-lock"
+
+dependencyLock {
+  lockFile = 'dependencies.lock'
+  globalLockFile = 'global.lock'
+  updateDependencies = []
+  skippedDependencies = ['com.sas.mkt.kafka:mkt-kafka-shared', 'com.sas.mkt.shared:mkt-shared-cloud', 'com.sas.mkt.shared:mkt-shared-commons-rest', 'com.sas.mkt.shared:mkt-shared-config-client', 'com.sas.mkt.shared:mkt-shared-msg']
+  includeTransitives = true
+  lockAfterEvaluating = true
+}

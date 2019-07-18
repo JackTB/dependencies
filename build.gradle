@@ -1,0 +1,602 @@
+buildscript {
+    repositories {
+        maven { url "${ci_nexus_repo_contextUrl}/content/groups/external" }
+    }
+    dependencies {
+        // Common build and external dependencies here - Do Not Modify or Add anything in here!
+        // CI360 and SAS CDP plugins
+        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.6.1"
+        classpath "com.netflix.nebula:gradle-dependency-lock-plugin:4.9.4"
+        // Spring plugins
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:1.5.20.RELEASE"
+        classpath "io.spring.gradle:dependency-management-plugin:1.0.6.RELEASE"
+        // Swagger plugins
+        classpath "org.asciidoctor:asciidoctor-gradle-plugin:1.5.6"
+        classpath "org.asciidoctor:asciidoctorj-pdf:1.5.0-alpha.16"
+        // AWS plugins
+        classpath "jp.classmethod.aws:gradle-aws-plugin:0.38"
+        // Docker plugin - http://bmuschko.github.io/gradle-docker-plugin/
+        classpath 'com.bmuschko:gradle-docker-plugin:3.2.5'
+        // AWS ECR extension to Docker plugin - https://bitbucket.org/double16/gradle-aws-ecr-plugin
+        classpath 'gradle.plugin.com.patdouble:gradle-aws-ecr-plugin:0.4.0'
+        // Grgit - https://github.com/ajoberstar/grgit
+        classpath 'org.ajoberstar:grgit:1.9.3'
+        // https://github.com/ksoichiro/gradle-build-info-plugin
+        classpath 'gradle.plugin.com.github.ksoichiro:gradle-build-info-plugin:0.2.0'
+    }
+}
+plugins {
+	id 'com.gradle.build-scan' version '1.16'
+}
+
+buildScan {
+	licenseAgreementUrl = 'https://gradle.com/terms-of-service'
+	licenseAgree = 'yes'
+}
+
+apply plugin: 'base'
+apply plugin: 'eclipse'       // also included by subprojects via common/config/java8cdp.gradle
+eclipse {
+    classpath {
+        downloadJavadoc = true
+        downloadSources = true
+    }
+}
+try {
+    apply plugin: 'org.ajoberstar.grgit'
+} catch (all) {
+    // ignore
+}
+
+defaultTasks 'build', 'assemble', 'test'
+
+// Build Aliases : define a synonym here if you want a shortcut to run multiple targets
+// Note:  The 'build_envs' task should only be included for repos that perform Python validation via gradle-python-envs
+//        Like [..., 'build', 'build_envs', 'test', ...]
+//        The 'deploy', 'dependencyCheck' and 'smokeTest' tasks may need to be excluded for some repos
+def buildAliases = [
+    'all' : ['clean', 'build', 'assemble', 'test', 'uploadArchives', 'uploadSyncS3', 'cloudFormation', 'smokeTest', 'promoteImage'],
+    'rebuild' : ['clean', 'build', 'assemble', 'test'],
+    //'jenkinsRelease' : ['clean', 'build', 'assemble', 'updateLock', 'test', 'saveLock'],
+    'jenkinsDeploy'  : ['build', 'assemble', 'test', 'sonarqube', 'uploadArchives', 'uploadSyncS3', 'cloudFormation', 'smokeTest', 'promoteImage'],
+    'jenkinsReview'  : ['build', 'assemble', 'test', 'uploadArchives'],
+    'pipelineBuild'  : ['build', 'assemble', 'test', 'sonarqube', 'uploadArchives', 'uploadSyncS3'],
+    'pipelineReview' : ['build', 'assemble', 'test']
+]
+def expandedTaskList = []
+gradle.startParameter.taskNames.each {
+    expandedTaskList << (buildAliases[it] ? buildAliases[it] : it)
+}
+gradle.startParameter.taskNames = expandedTaskList.flatten()
+
+project.rootProject.startTime = java.time.Instant.now().getEpochSecond()
+
+allprojects {
+    // include our SAS and third-party dependency versions
+    apply from: "$rootDir/common/config/dependencies.gradle"
+
+    // include our artifact repository configurations
+    apply from: "$rootDir/common/config/repos.gradle"
+
+    // include our artifact repository configurations
+    apply from: "$rootDir/common/config/jenkins.gradle"
+
+    // https://github.com/nebula-plugins/gradle-dependency-lock-plugin
+    apply from: "$rootDir/common/config/release.gradle"
+
+    // include our common aws methods
+    apply from: "$rootDir/common/config/aws.gradle"
+
+    // Note - code specific plugins like java, jacoco, avro, ... should be applied in each subproject
+
+    // @@@TEMPLATE@@@ - update the 'group' name below
+    // set common artifact group name - has to match rootProject.name in settings.gradle
+    group = 'com.sas.mkt.template.microservice'
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = "${versions.gradle}"
+}
+
+println '+-------------------------------------------------------------------------------'
+println '| (CI360) Building release='+buildRelease+', version='+version
+println '|                  buildLevel='+buildLevel+', buildType='+buildType
+println '|                  branch='+branch+', commit='+gitCommit
+println '|                  stack='+stackPrefix+', bucket='+stackBucket
+println '|                  Tasks='+gradle.startParameter.taskNames
+if (project.getGradle().startParameter.isOffline())
+    println '|                  ***** Running in OFFLINE mode *****'
+if (buildLevel.startsWith('dev') || branch.equals('local'))
+    println '|                  ***** DEV Build *****'
+println '+-------------------------------------------------------------------------------'
+
+// Instead of testReport task, use ant.junitreport to generate both the XML and HTML aggregated resutls for JARTS plugin
+configurations {
+    antJunitXmlResultAggregator
+}
+
+dependencies {
+    antJunitXmlResultAggregator "org.apache.ant:ant-junit:${versions.ant_junit}"
+    compile (libraries.sas_commons_rest) {
+        exclude group: 'ch.qos.logback'
+    }
+    compile (libraries.logback_classic) {
+        force = true
+    }
+    compile (libraries.logback_core) {
+        force = true
+    }
+    // compile libraries.sas_commons_rest_client
+
+    // CI360 @@@SHARED@@@ - Our Commons REST Context for supporting Viya auth headers
+    // see https://gitlab.sas.com/CustomerIntelligence/Infra/mkt-shared-rest-context
+    //compile ("com.sas.mkt.shared:mkt-shared-rest-context:1.${buildSprint}.+")
+
+    // CI360 @@@SHARED@@@ - com.sas.mkt.shared.msg
+    // see https://gitlab.sas.com/CustomerIntelligence/Infra/mkt-shared/tree/master/mkt-shared-msg
+    //compile ("com.sas.mkt.shared:mkt-shared-msg:1.${buildSprint}.+")
+
+    // CI360 @@@SHARED@@@ - com.sas.mkt.shared.cloud*
+    // see https://gitlab.sas.com/CustomerIntelligence/Infra/mkt-shared/tree/master/mkt-shared-cloud
+    //compile ("com.sas.mkt.shared:mkt-shared-cloud:1.${buildSprint}.+")
+
+    // CI360 @@@SHARED@@@ - Common ConfigService Client
+    // see https://gitlab.sas.com/CustomerIntelligence/Infra/mkt-shared-infra-client/tree/master
+    //compile ( "com.sas.mkt.shared:mkt-shared-infra-client:1.${buildSprint}.0-SNAPSHOT") {
+    compile ("com.sas.mkt.shared:mkt-shared-infra-client:1.${buildSprint}.+") {
+        exclude group: 'log4j'
+    }
+
+    // CI360 @@@SHARED@@@ - Common Kafka Schemas
+    //compile ("com.sas.mkt.kafka:mkt-kafka-shared:1.${buildSprint}.+") {
+    //    exclude group: 'log4j'
+    //}
+
+    // subproject dependencies
+    compile project(':mkt-template-microservice-user')
+
+    // Example TPJ modules for compile
+    //compile libraries.aws_java_sdk - Don't include the full AWS SDK unless you have to
+    // AWS depends that everyone will need - same 4 as in org.springframework.cloud:spring-cloud-aws-core
+    compile libraries.aws_java_sdk_cloudformation
+    compile libraries.aws_java_sdk_core
+    compile libraries.aws_java_sdk_ec2
+    compile libraries.aws_java_sdk_s3
+    // Additional AWS depends that you will usually need
+    compile libraries.aws_java_sdk_cloudwatch
+    compile libraries.aws_java_sdk_logs
+    //compile libraries.aws_java_sdk_dynamodb
+    // Force AWS SDK to use our version of Jackson to fix BlackDuck reported vulnerabilities
+    compile libraries.jackson
+
+    // TPJ modules for compile
+    //compile libraries.spring_data_dynamodb
+    compile libraries.hsql
+    compile libraries.postgresql
+    compile libraries.spring_orm
+    compile libraries.spring_boot_starter_actuator
+    compile libraries.spring_boot_starter_data_jpa
+    compile libraries.spring_boot_starter_web
+    // sukdta - to solve slf4j multiple binding conflict because of logback jar used in commons-rest libraries
+    // see https://rndjira.sas.com/browse/NGMTS-2762 and http://sww.sas.com/saspedia/Logging_in_microservices
+    //compile libraries.spring_boot_starter_log4j
+    compile libraries.springfox_swagger2
+    compile libraries.springfox_swagger_ui
+    compile libraries.commons_lang3
+    compile libraries.liquibase
+
+    // TPJ metric modules for compile
+    compile libraries.metrics_annotation
+    compile libraries.metrics_core
+    compile libraries.metrics_healthchecks
+    compile libraries.metrics_spring
+    //compile libraries.metrics_servlet
+    //compile libraries.metrics_servlets
+
+    // TPJ modules for test
+    testCompile libraries.cglib_nodep
+    testCompile libraries.groovy_all
+    testCompile libraries.junit4
+    testCompile libraries.objenesis
+    //testCompile libraries.spock_core
+    //testCompile libraries.spock_spring
+    testCompile libraries.spring_boot_starter_test
+    testCompile libraries.spring_test
+    testCompile libraries.springfox_staticdocs
+    testCompile libraries.gson
+    testCompile libraries.spock_core
+
+	  testCompile 'com.tngtech.archunit:archunit:0.10.2'
+
+    // modules for integrationTest
+    integrationTestCompile libraries.rest_assured
+    //integrationTestCompile libraries.hoverfly
+    //integrationTestCompile libraries.wiremock
+}
+
+task testReports() {
+    def reportsDir = new File("$buildDir/reports/allTests")
+    def reportsHtmlDir = new File("$buildDir/reports/allTests/html")
+    def summaryCsv = file("$buildDir/reports/allTests/TESTS-TestSuites.csv")
+    def resultsDir = file(".")
+    ant.taskdef (
+        name: 'junitXmlReport',
+        classname: 'org.apache.tools.ant.taskdefs.optional.junit.XMLResultAggregator',
+        classpath: configurations.antJunitXmlResultAggregator.asPath
+    )
+    doLast {
+        if (!reportsHtmlDir.exists()) {
+            reportsHtmlDir.mkdirs()
+        }
+        // create TESTS-TestSuites.xml
+        ant.junitXmlReport(todir: reportsDir) {
+            fileset(dir: resultsDir) {
+                include(name: '**/TEST-*.xml')
+            }
+            report(todir: reportsHtmlDir, format: "frames")
+        }
+        println path+" - Created file://$buildDir/reports/allTests/html/index.html"
+        println path+" - Created file://$buildDir/reports/allTests/TESTS-TestSuites.xml"
+        // create TESTS-TestSuites.csv
+        summaryCsv.text = '"Project","Test","Result","Duration"\r\n'
+        gradle.rootProject.allprojects.each { project ->
+            def testResults = project.fileTree("build") {
+                include '**/TEST-*.xml'
+            }
+            testResults.each { file ->
+                def testsuite = new XmlSlurper().parse(file)
+                testsuite.testcase.each { testcase ->
+                    def result = "PASS"
+                    if (!testcase.failure.isEmpty()) {
+                        result = "FAIL"
+                    } else if (!testcase.skipped.isEmpty()) {
+                        result = "SKIP"
+                    }
+                    summaryCsv << "\"${project.name}\",\"${testcase.@classname}.${testcase.@name}\",\"${result}\",\"${testcase.@time}\"\r\n"
+                }
+            }
+        }
+        println path+" - Created file://$buildDir/reports/allTests/TESTS-TestSuites.csv"
+    }
+}
+check.dependsOn(testReports)
+// make sure all tests are run before the test report
+gradle.projectsEvaluated {
+    def quickTasks = []
+    gradle.rootProject.allprojects.each { project ->
+        quickTasks.addAll(project.tasks.findAll { it.name == 'test' })
+        quickTasks.addAll(project.tasks.findAll { it.name == 'integrationTest' })
+        quickTasks.addAll(project.tasks.findAll { it.name == 'smokeTest' })
+    }
+    quickTasks.each { task ->
+        project.tasks.testReports.shouldRunAfter task
+    }
+}
+
+// JaCoCo support - see https://gist.github.com/aalmiray/e6f54aa4b3803be0bcac
+apply plugin: 'jacoco'
+jacoco {
+    toolVersion = "${versions.jacoco}"
+}
+
+task jacocoTestReport(type: JacocoReport) {
+    // clear out default values, so we can build it below and skip non-Java projects
+    sourceDirectories = files()
+    classDirectories = files()
+    executionData = files()
+    reports {
+        // make the top build report destinations the same as the subprojects
+        html {
+            enabled true
+            destination "${buildDir}/reports/jacoco/test/html/"
+        }
+        xml {
+            enabled true
+            destination "${buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+        }
+        csv.enabled false
+    }
+    // Work-around to allow us to build list of executionData files in doFirst
+    onlyIf = {
+        true
+    }
+    /*
+     * Builds list of source dirs, class dirs, and executionData files
+     * when task is run, not at script evaluation time
+     */
+    doFirst {
+        subprojects.findAll { subproject ->
+            (subproject.pluginManager.hasPlugin('java') && (subproject.name.indexOf('smoke') == -1) && (subproject.name.indexOf('codedeploy') == -1) && (subproject.name.indexOf('cloudformation') == -1))
+        }.each { subproject ->
+            println subproject.name+" - Adding Exec results to jacocoTestReport"
+            additionalSourceDirs files((Set<File>) subproject.sourceSets.main.allJava.srcDirs)
+            additionalClassDirs ((FileCollection) subproject.sourceSets.main.output)
+            if (subproject.pluginManager.hasPlugin('jacoco')) {
+                executionData subproject.tasks.jacocoTestReport.executionData
+            }
+        }
+        executionData = files(executionData.findAll {
+            it.exists()
+        })
+    }
+}
+check.dependsOn(jacocoTestReport)
+
+/*
+ * Apply SonarQube plugin to the root project only. And roll up the subproject unit test and
+ * integration test results into top level 'test-merged.exec' & 'integrationTest-merged.exec'
+ * files for SonarQube analysis as a single project.
+ */
+apply from: "$rootDir/common/config/sonarqube.gradle"
+
+// merge subproject UnitTest execution results
+task jacocoMergeUnitTests(type: JacocoMerge) {
+    executionData = files()
+    destinationFile = file("$buildDir/jacoco/test-merged.exec")
+    // Work-around to allow us to build list of executionData files in doFirst
+    onlyIf = {
+        true
+    }
+    // Builds list of executionData files when task is run, not at script evaluation time
+    doFirst {
+        subprojects.findAll { subproject ->
+            (subproject.pluginManager.hasPlugin('java') && (subproject.name.indexOf('smoke') == -1) && (subproject.name.indexOf('codedeploy') == -1) && (subproject.name.indexOf('cloudformation') == -1))
+        }.each { subproject ->
+            println subproject.name + " - Merging UnitTest execution results to "+ destinationFile.absolutePath
+            if (subproject.pluginManager.hasPlugin('jacoco')) {
+                if (subproject.tasks.findByName('test')) {
+                    executionData subproject.tasks.findByName('test')
+                }
+            }
+            executionData = files(executionData.findAll {
+                it.exists()
+            })
+        }
+    }
+}
+check.dependsOn(jacocoMergeUnitTests)
+
+// merge subproject IntegrationTest execution results
+task jacocoMergeIntegrationTests(type: JacocoMerge) {
+    executionData = files()
+    destinationFile = file("$buildDir/jacoco/integrationTest-merged.exec")
+    // Work-around to allow us to build list of executionData files in doFirst
+    onlyIf = {
+        true
+    }
+    // Builds list of executionData files when task is run, not at script evaluation time
+    doFirst {
+        subprojects.findAll { subproject ->
+            (subproject.pluginManager.hasPlugin('java') && (subproject.name.indexOf('smoke') == -1) && (subproject.name.indexOf('codedeploy') == -1) && (subproject.name.indexOf('cloudformation') == -1))
+        }.each { subproject ->
+            println subproject.name + " - Merging IntegrationTest execution results to "+ destinationFile.absolutePath
+            if (subproject.pluginManager.hasPlugin('jacoco')) {
+                if (subproject.tasks.findByName('integrationTest')) {
+                    executionData subproject.tasks.findByName('integrationTest')
+                }
+                executionData = files(executionData.findAll {
+                    it.exists()
+                })
+            }
+        }
+    }
+}
+check.dependsOn(jacocoMergeIntegrationTests)
+
+/*
+ * make sure all tests are run before the code coverage report,
+ * and before the test execution merge tasks for sonar
+ */
+gradle.projectsEvaluated {
+    def quickTasks = []
+    gradle.rootProject.allprojects.each { project ->
+        quickTasks.addAll(project.tasks.findAll { it.name == 'test' })
+        quickTasks.addAll(project.tasks.findAll { it.name == 'integrationTest' })
+    }
+    quickTasks.each { task ->
+        project.tasks.jacocoTestReport.shouldRunAfter task
+    }
+    quickTasks.each { task ->
+        project.tasks.jacocoMergeUnitTests.shouldRunAfter task
+    }
+    quickTasks.each { task ->
+        project.tasks.jacocoMergeIntegrationTests.shouldRunAfter task
+    }
+}
+
+// make sure all uploadArchives are disabled if this is not a staging, master or release branch build
+gradle.projectsEvaluated {
+    def quickTasks = []
+    if (buildUploadArchives == false) {
+        gradle.rootProject.allprojects.each { project ->
+            quickTasks.addAll(project.tasks.findAll { it.name == 'uploadArchives' })
+        }
+        quickTasks.each { task ->
+            task.enabled = buildUploadArchives
+            println task.path+" - (CI360) Disabling upload of artifacts to repository"
+        }
+    }
+}
+
+// Disable SonarQube analysis if neither sonar.login or SONAR_AUTH_TOKEN are set
+gradle.projectsEvaluated {
+    def quickTasks = []
+    if ((System.getProperty('sonar.login') == null) && (System.getenv('SONAR_AUTH_TOKEN') == null)) {
+        gradle.rootProject.allprojects.each { project ->
+            quickTasks.addAll(project.tasks.findAll { it.name == 'sonarqube' })
+        }
+        quickTasks.each { task ->
+            task.enabled = false
+            println task.path+" - (CI360) Disabling SonarQube analysis"
+        }
+    }
+}
+
+// For Docker builds, disable pushing images to AWS ECR if no stack was specified unless its a team/release build
+gradle.projectsEvaluated {
+    def quickTasks = []
+    if (uploadDockerImages == false) {
+        gradle.rootProject.allprojects.each { project ->
+            quickTasks.addAll(project.tasks.findAll { it.name == 'tagImage' })
+            quickTasks.addAll(project.tasks.findAll { it.name == 'pushImage' })
+            quickTasks.addAll(project.tasks.findAll { it.name == 'promoteTag' })
+            quickTasks.addAll(project.tasks.findAll { it.name == 'promoteImage' })
+            quickTasks.addAll(project.tasks.findAll { it.name == 'deploy' })
+        }
+        quickTasks.each { task ->
+            task.enabled = false
+            println task.path+" - (CI360) Disabling upload of Docker images, due to buildType=${buildType} and stackPrefix=${stackPrefix})"
+        }
+    }
+}
+
+// Disable Smoke Tests if no stack has been specified
+gradle.projectsEvaluated {
+    def quickTasks = []
+    if ((stackPrefix == null) || (stackPrefix.isEmpty())) {
+        gradle.rootProject.allprojects.each { project ->
+            quickTasks.addAll(project.tasks.findAll { it.name == 'smokeTest' })
+        }
+        quickTasks.each { task ->
+            task.enabled = false
+            task.dependsOn = []
+            println task.path+" - (CI360) Disabling Smoke Tests (No stack specified)"
+        }
+    }
+}
+
+//
+// AWS Credentials
+//
+import com.amazonaws.auth.AWSCredentials
+import com.amazonaws.auth.EnvironmentVariableCredentialsProvider
+import com.amazonaws.auth.profile.ProfileCredentialsProvider
+
+def fetchAwsCredentials = {
+    try {
+        def awsAccessKey = System.getenv('AWS_ACCESS_KEY_ID')
+        def awsSecretKey = System.getenv('AWS_SECRET_ACCESS_KEY')
+
+        if ((awsAccessKey != null) && (awsSecretKey != null)) {
+
+            println 'Found AWS credentials on ENV...'
+            return new EnvironmentVariableCredentialsProvider().credentials
+        } else {
+
+            def awsDefaultProfile = System.getProperty('AWS_DEFAULT_PROFILE', System.getenv('AWS_DEFAULT_PROFILE'))
+
+            if ((awsDefaultProfile != null) && (!awsDefaultProfile.isEmpty())) {
+
+                println 'Looking for AWS credentials in profile='+awsDefaultProfile
+                return new ProfileCredentialsProvider(awsDefaultProfile).credentials
+            } else {
+
+                println 'Looking for AWS credentials in [default] profile'
+                return new ProfileCredentialsProvider().credentials
+            }
+        }
+    } catch (Exception exception) {
+
+        logger.debug('Unable to retrieve AWS credentials from profile.')
+        return null
+    }
+}
+
+task ecrCreate(type:Exec) {
+    // Ignore the exit value so we don't fail when the repository already exists.
+    // If ecrCreate fails for another reason, then the ecrInit will fail as well.
+    ignoreExitValue true
+
+    doFirst {
+        def outDir = new File("${buildDir}")
+        if (!outDir.exists()) {
+            println "$name - Creating outDir=${buildDir}"
+            outDir.mkdir()
+        }
+        println "${path} - Creating ECR Repository for: " + "mkt-${cloudGroup}/${cloudProject}".toLowerCase()
+
+        AWSCredentials awsCredentials = fetchAwsCredentials()
+        if (awsCredentials == null) {
+            println 'AWS credentials were null - unable to create ECR Repository'
+            throw new GradleException("AWS credentials must be supplied to use task=" + name)
+        }
+
+        def awsExecutable = getAwsExecutable()
+        if (awsExecutable == null) {
+
+            println 'Unable to find an aws cli executable.'
+            throw new GradleException("Unable to find an aws cli executable.")
+        }
+
+        executable "${awsExecutable}"
+
+        def argsList = ['ecr', 'create-repository', '--repository', "mkt-${cloudGroup}/${cloudProject}".toLowerCase()]
+        workingDir "${buildDir}"
+        args = argsList
+        println "${path} - Calling Exec='${executable}' from dir='${workingDir}' with args='${args}'"
+    }
+}
+
+task ecrInit(type:Exec, dependsOn: ecrCreate) {
+    doFirst {
+        println "${path} - Setting ECR Repository policy for: " + "mkt-${cloudGroup}/${cloudProject}".toLowerCase()
+
+        AWSCredentials awsCredentials = fetchAwsCredentials()
+        if (awsCredentials == null) {
+
+            println 'AWS credentials were null - unable to set ECR Repository policy'
+            throw new GradleException("AWS credentials must be supplied to use task=" + name)
+        }
+
+        def awsExecutable = getAwsExecutable()
+        if (awsExecutable == null) {
+
+            println 'Unable to find an aws cli executable.'
+            throw new GradleException("Unable to find an aws cli executable.")
+        }
+
+        executable "${awsExecutable}"
+
+        def policyText = '{                                           \
+                            "Version": "2008-10-17",                  \
+                            "Statement": [                            \
+                              {                                       \
+                                "Sid": "AllowCrossAccountPull",       \
+                                "Effect": "Allow",                    \
+                                "Principal": {                        \
+                                  "AWS": [                            \
+                                    "arn:aws:iam::952478859445:root", \
+                                    "arn:aws:iam::861073095096:root", \
+                                    "arn:aws:iam::925052198153:root", \
+                                    "arn:aws:iam::314901267467:root", \
+                                    "arn:aws:iam::418062132543:root", \
+                                    "arn:aws:iam::703912302700:root"  \
+                                  ]                                   \
+                                },                                    \
+                                "Action": [                           \
+                                  "ecr:GetDownloadUrlForLayer",       \
+                                  "ecr:BatchGetImage",                \
+                                  "ecr:BatchCheckLayerAvailability"   \
+                                ]                                     \
+                              }                                       \
+                            ]                                         \
+                          }'.replaceAll('\\s','')
+
+        def policyTextJson =  groovy.json.JsonOutput.prettyPrint(policyText)
+        def policyTextFile = new File("${buildDir}/policy-text.json")
+
+        if (System.properties['os.name'].toLowerCase().contains('windows')) {
+
+            policyTextFile.write(policyTextJson.toString().replaceAll('"', '"""'))
+        } else {
+
+            policyTextFile.write(policyTextJson.toString())
+        }
+
+        def argsList = ['ecr', 'set-repository-policy', '--registry-id', '952478859445', '--repository-name', "mkt-${cloudGroup}/${cloudProject}".toLowerCase(), '--policy-text', policyTextFile.getText()]
+
+        workingDir "${buildDir}"
+        args = argsList
+        println "${path} - Calling Exec='${executable}' from dir='${workingDir}' with args='${args}'"
+    }
+}

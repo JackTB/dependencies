@@ -1,0 +1,14 @@
+/*
+ * The settings file is used to specify which projects to include in your build.
+ * In a single project build this file can be empty or even removed.
+ *
+ * Detailed information about configuring a multi-project build in Gradle can be found
+ * in the user guide at http://gradle.org/docs/2.2.1/userguide/multi_project_builds.html
+ */
+
+// @@@TEMPLATE@@@ - update 'rootProject.name'
+// base repo path for your uploaded artifacts, which has to match the allprojects -> group name in build.gradle
+rootProject.name = 'com.sas.mkt.template.microservice'
+
+// @@@TEMPLATE@@@ - remove the subprojects below and include yours instead as you populate your repo
+// To declare projects as part of a multi-project build use the 'include' method

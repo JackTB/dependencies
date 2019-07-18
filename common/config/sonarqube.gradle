@@ -1,0 +1,19 @@
+// common setup for SonarQube
+// https://plugins.gradle.org/plugin/org.sonarqube
+// https://github.com/SonarSource/sonar-scanner-gradle
+
+// NOTE - When using this file, you must first include the following classpath
+//        in your top-level build.gradle buildscript dependencies section
+//classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.6.1"
+apply plugin: 'org.sonarqube'
+
+sonarqube {
+    properties {
+        property "sonar.host.url", System.getenv('SONAR_HOST_URL')
+        property "sonar.login", System.getenv('SONAR_AUTH_TOKEN')
+        property "sonar.projectName", "${cloudProject}"
+        property "sonar.projectVersion", "${buildRelease}"
+        property "sonar.jacoco.reportPath", "${project.buildDir}/jacoco/test-merged.exec"
+        property "sonar.jacoco.itReportPath", "${project.buildDir}/jacoco/integrationTest-merged.exec"
+    }
+}

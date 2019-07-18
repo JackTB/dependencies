@@ -1,0 +1,62 @@
+//
+// Common methods for AWS
+//
+
+def getAwsExecutable() {
+
+    if (System.properties['os.name'].toLowerCase().contains('windows')) {
+
+        def awsExecutable = null
+
+        try {
+            def checkExec = exec {
+                println "Checking for executable 'aws.cmd'"
+                executable "aws.cmd"
+                args "--version"
+                ignoreExitValue = true
+            }
+            if (checkExec.exitValue == 0) {
+                awsExecutable = "aws.cmd"
+            }
+        } catch (all) {
+            println "Unable to locate 'aws.cmd'"
+        }
+
+        if (awsExecutable == null) {
+            try {
+                def checkExec = exec {
+                    println "Checking for executable 'aws'"
+                    executable "aws"
+                    args "--version"
+                    ignoreExitValue = true
+                }
+                if (checkExec.exitValue == 0) {
+                    awsExecutable = "aws"
+                }
+            } catch (all) {
+                println "Unable to locate 'aws'"
+            }
+        }
+
+        if (awsExecutable == "aws.cmd") {
+
+            return "aws.cmd"
+        } else if (awsExecutable == "aws") {
+
+            return "aws"
+        } else {
+
+            logger.debug('Unable to find an aws cli executable.')
+            return null
+        }
+
+    } else {
+
+        return "aws"
+    }
+}
+
+// Export methods by turning them into closures
+ext {
+    getAwsExecutable = this.&getAwsExecutable
+}

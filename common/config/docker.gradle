@@ -1,0 +1,119 @@
+// common setup for building Docker containers and publishing to AWS ECR
+// Based off of https://github.com/dpr-rec/gradle-docker-plugin-248/blob/master/gradle/docker-utils.gradle
+
+// NOTE:  The jenkins.gradle file must be included in the top-level build.gradle before this one
+
+// NOTE - When using this file, you must first include the buildscript classpath entries
+//        below in your top-level build.gradle buildscript dependencies section, along with
+//        applying the following plugins:
+//apply plugin: 'com.bmuschko.docker-remote-api'
+//apply plugin: 'com.patdouble.awsecr'
+
+buildscript {
+    repositories {
+        maven { url "${ci_nexus_repo_contextUrl}/content/groups/external" }
+    }
+    dependencies {
+        // Docker plugin - http://bmuschko.github.io/gradle-docker-plugin/
+        classpath 'com.bmuschko:gradle-docker-plugin:3.2.5'
+        // AWS ECR extension to Docker plugin - https://bitbucket.org/double16/gradle-aws-ecr-plugin
+        classpath 'gradle.plugin.com.patdouble:gradle-aws-ecr-plugin:0.4.0'
+    }
+}
+
+// common setup for builds to use Dev/us-east-1
+ext {
+    docker = [:]
+}
+docker.ecrRepo = '952478859445.dkr.ecr.us-east-1.amazonaws.com'
+docker {
+    registryCredentials {
+        url = "https://${docker.ecrRepo}".toString()
+    }
+}
+
+def isDockerInstalled() {
+    def dockerTask = tasks.create(name: "isDockerInstalled", type: Exec) {
+        // Docker needs to be installed and the daemon is running and reachable
+        if (System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')) {
+            println path + " - using Windows path..."
+            commandLine 'cmd', '/c', 'docker info'
+        } else {
+            println path + " - using Linux/MacOS path..."
+            commandLine 'sh', '-c', 'docker info'
+        }
+        // capture stdout/stderr
+        standardOutput new ByteArrayOutputStream()
+        errorOutput    new ByteArrayOutputStream()
+        // have Gradle ignore the rc, as we'll check and use it below
+        ignoreExitValue true
+        doLast {
+            if (execResult.getExitValue() == 0) {
+                if (requireDocker.toLowerCase().equals('disabled')) {
+                    // HACK - Provide a way to disable all Docker usage for repos that aren't ready for the latest template changes
+                    hasDocker = false
+                    uploadDockerImages = false
+                    println '+-------------------------------------------------------------------------------'
+                    println '|'
+                    println path + " - !!!!! DISABLING Docker build tasks"
+                    println '|'
+                    println '+-------------------------------------------------------------------------------'
+                } else {
+                    hasDocker = true
+                    println '+-------------------------------------------------------------------------------'
+                    println '|'
+                    println path + " - ENABLING Docker build tasks"
+                    println '|'
+                    println '+-------------------------------------------------------------------------------'
+                }
+            } else {
+                hasDocker = false
+                uploadDockerImages = false
+                println '+-------------------------------------------------------------------------------'
+                println '|'
+                logger.error(errorOutput.toString())
+                println path + " - Docker Daemon is DOWN or not installed"
+                if (requireDocker.toLowerCase().equals('true')) {
+                    println path + " - !!!!! Building this repo requires Docker"
+                    println '|'
+                    println '+-------------------------------------------------------------------------------'
+                    throw new GradleException("!!!!! (CI360) ERROR - Docker is required to build this repo")
+                } else {
+                    println path + " - !!!!! Disabling OPTIONAL Docker build tasks"
+                    println '|'
+                    println '+-------------------------------------------------------------------------------'
+                }
+            }
+            println '|'
+            println path + " - requireDocker=${requireDocker}, hasDocker=${hasDocker}, uploadDockerImages=${uploadDockerImages}"
+            println '|'
+            println '+-------------------------------------------------------------------------------'
+        }
+    }
+    dockerTask.execute()
+}
+
+// Import task types
+import com.bmuschko.gradle.docker.tasks.image.DockerTagImage
+import com.bmuschko.gradle.docker.utils.DockerThreadContextClassLoader
+import com.bmuschko.gradle.docker.utils.ThreadContextClassLoader
+
+def tagDockerImage(String imageId, String name, String[] tags) {
+    def i = 0
+    tags.each { tagIt ->
+        def tagTask = tasks.create(name: "tagDockerImage${i}", type: DockerTagImage) {
+            targetImageId { imageId }
+            repository = name.trim()
+            tag = tagIt.trim()
+        }
+        tagTask.doFirst { println path + "Tagging image '${imageId}' with tag '${repo}:${tag}'" }
+        tagTask.execute()
+        i++
+    }
+}
+
+// Export methods by turning them into closures
+ext {
+    tagDockerImage = this.&tagDockerImage
+    isDockerInstalled = this.&isDockerInstalled
+}
