@@ -12,7 +12,7 @@ buildscript {
         classpath "io.spring.gradle:dependency-management-plugin:1.0.8.RELEASE"
         // Swagger plugins
         classpath "org.asciidoctor:asciidoctor-gradle-plugin:1.5.6"
-        classpath "org.asciidoctor:asciidoctorj-pdf:1.5.0-alpha.18"
+        classpath "org.asciidoctor:asciidoctorj-pdf:1.5.0-beta.6"
         // AWS plugins
         classpath "jp.classmethod.aws:gradle-aws-plugin:0.38"
         // Docker plugin - http://bmuschko.github.io/gradle-docker-plugin/
