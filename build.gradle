@@ -16,7 +16,7 @@ buildscript {
         // AWS plugins
         classpath "jp.classmethod.aws:gradle-aws-plugin:0.38"
         // Docker plugin - http://bmuschko.github.io/gradle-docker-plugin/
-        classpath 'com.bmuschko:gradle-docker-plugin:6.1.1'
+        classpath 'com.bmuschko:gradle-docker-plugin:6.2.0'
         // AWS ECR extension to Docker plugin - https://bitbucket.org/double16/gradle-aws-ecr-plugin
         classpath 'gradle.plugin.com.patdouble:gradle-aws-ecr-plugin:0.4.0'
         // Grgit - https://github.com/ajoberstar/grgit
