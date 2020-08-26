@@ -6,7 +6,7 @@ buildscript {
         // Common build and external dependencies here - Do Not Modify or Add anything in here!
         // CI360 and SAS CDP plugins
         classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.8.0.1969"
-        classpath "com.netflix.nebula:gradle-dependency-lock-plugin:8.5.0"
+        classpath "com.netflix.nebula:gradle-dependency-lock-plugin:10.0.0"
         // Spring plugins
         classpath "org.springframework.boot:spring-boot-gradle-plugin:2.2.2.RELEASE"
         classpath "io.spring.gradle:dependency-management-plugin:1.0.8.RELEASE"
