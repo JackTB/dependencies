@@ -206,7 +206,7 @@ dependencies {
     testCompile libraries.gson
     testCompile libraries.spock_core
 
-	  testCompile 'com.tngtech.archunit:archunit:0.12.0'
+	  testCompile 'com.tngtech.archunit:archunit:0.17.0'
 
     // modules for integrationTest
     integrationTestCompile libraries.rest_assured
